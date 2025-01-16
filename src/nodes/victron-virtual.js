@@ -77,7 +77,6 @@ const properties = {
       }[v] || 'unknown')
     },
     NrOfPhases: { type: 'd', format: (v) => v != null ? v : '', value: 1 },
-    SinglePhaseNr: { type: 'd', format: (v) => v != null ? v : '', value: 1 },
     Connected: { type: 'd', format: (v) => v != null ? v : '', value: 1 }
   },
   meteo: {
@@ -322,7 +321,7 @@ module.exports = function (RED) {
         case 'pvinverter': {
           iface.Position = Number(config.position ?? 0)
           iface.NrOfPhases = Number(config.pvinverter_nrofphases ?? 1)
-          iface.SinglePhaseNr = Number(config.pvinverter_singlephasenr ?? 1)
+          iface.SinglePhaseActivePhase = Number(config.pvinverter_singlephaseactivephase ?? 1)
           const properties = [
             { name: 'Current', unit: 'A' },
             { name: 'Power', unit: 'W' },
@@ -330,10 +329,9 @@ module.exports = function (RED) {
             { name: 'Energy/Forward', unit: 'kWh' }
           ]
           for (let i = 1; i <= iface.NrOfPhases; i++) {
-            if (iface.NrOfPhases == 1) {
-              phase = `L${iface.SinglePhaseNr}`
-            } else {
-              phase = `L${i}`
+            let phase = `L${i}`
+            if (iface.NrOfPhases === 1) {
+              phase = `L${iface.SinglePhaseActivePhase}`
             }
             properties.forEach(({ name, unit }) => {
               const key = `Ac/${phase}/${name}`
@@ -352,10 +350,17 @@ module.exports = function (RED) {
             iface.ErrorCode = 0
             iface.StatusCode = 0
           }
-          if (iface.NrOfPhases == 3) {
-       	    text = `Virtual ${iface.NrOfPhases}-phase pvinverter`
-       	  } else {
-            text = `Virtual ${iface.NrOfPhases}-phase pvinverter on phase ${iface.SinglePhaseNr}`
+          if (iface.NrOfPhases === 3) {
+            text = `Virtual ${iface.NrOfPhases}-phase pvinverter`
+          } else {
+            ifaceDesc.properties['Ac/Phase'] = { type: 'd' }
+            iface['Ac/Phase'] = iface.SinglePhaseActivePhase
+            text = `Virtual ${iface.NrOfPhases}-phase pvinverter on phase ${iface.SinglePhaseActivePhase}`
+          }
+
+          if (!config.pvinverter_include_powerlimit) {
+            delete ifaceDesc.properties['Ac/PowerLimit']
+            delete iface['Ac/PowerLimit']
           }
           break
         }
