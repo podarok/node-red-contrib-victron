@@ -377,7 +377,7 @@ module.exports = function (RED) {
           text = `Virtual ${iface.NrOfPhases}-phase pvinverter`
           break
         }
-        case 'solarcharger': {
+        case 'solarcharger':
           iface.NrOfTrackers = Number(config.solarcharger_nroftrackers ?? 1);
           [
             { name: 'MaxBatteryCurrent', unit: 'A' },
@@ -396,7 +396,7 @@ module.exports = function (RED) {
               [
                 { name: 'MaxPower', unit: 'W' },
                 { name: 'MaxVoltage', unit: 'V' },
-                { name: 'Yield/Power', unit: 'kWh' },
+                { name: 'Yield/Power', unit: 'kWh' }
               ].forEach(({ name, unit }) => {
                 const key = `History/Daily/0/Pv/${tracker - 1}/${name}`
                 ifaceDesc.properties[key] = {
@@ -423,9 +423,7 @@ module.exports = function (RED) {
             })
           }
           text = `Virtual ${iface.NrOfTrackers}-tracker solarcharger`
-        }
           break
-
         case 'tank':
           iface.FluidType = Number(config.fluid_type ?? 1) // Fresh water
           if (!config.include_tank_battery) {
