@@ -79,6 +79,30 @@ const properties = {
     NrOfPhases: { type: 'd', format: (v) => v != null ? v : '', value: 1 },
     Connected: { type: 'd', format: (v) => v != null ? v : '', value: 1 }
   },
+  solarcharger: {
+    'Alarms/HightTemperature': { type: 'd' },
+    'Alarms/ShortCircuit': { type: 'd' },
+    Connected: { type: 'd', format: (v) => v != null ? v : '', value: 1 },
+    'Dc/0/Current': { type: 'd', format: (v) => v != null ? v.toFixed(2) + 'A' : '' },
+    'Dc/0/Temperature': { type: 'd', format: (v) => v != null ? v.toFixed(1) + 'C' : '' },
+    'Dc/0/Voltage': { type: 'd', format: (v) => v != null ? v.toFixed(2) + 'V' : '' },
+    'Link/ChargeCurrent': { type: 'd', format: (v) => v != null ? v.toFixed(2) + 'A' : '' },
+    NrOfTrackers: { type: 'i', value: 1, min: 0, max: 4 },
+    MppOperationMode: {
+      type: 'i',
+      value: 0,
+      min: 0,
+      max: 2,
+      format: (v) => ({
+        0: 'Off',
+        1: 'Voltage or current limited',
+        2: 'MPPT Traker active'
+      }[v] || 'unknown')
+    },
+    'Yield/Power': { type: 'd', format: (v) => v != null ? v.toFixed(2) + 'W' : '' },
+    'Yield/System': { type: 'd', format: (v) => v != null ? v.toFixed(2) + 'kWh' : '' },
+    'Yield/User': { type: 'd', format: (v) => v != null ? v.toFixed(2) + 'kWh' : '' }
+  },
   meteo: {
     Irradiance: { type: 'd', format: (v) => v != null ? v.toFixed(1) + 'W/m2' : '' },
     WindSpeed: { type: 'd', format: (v) => v != null ? v.toFixed(1) + 'm/s' : '' },
@@ -353,6 +377,55 @@ module.exports = function (RED) {
           text = `Virtual ${iface.NrOfPhases}-phase pvinverter`
           break
         }
+        case 'solarcharger': {
+          iface.NrOfTrackers = Number(config.solarcharger_nroftrackers ?? 1);
+          [
+            { name: 'MaxBatteryCurrent', unit: 'A' },
+            { name: 'MaxBatteryVoltage', unit: 'V' },
+            { name: 'MaxPower', unit: 'W' },
+            { name: 'MaxPvVoltage', unit: 'V' },
+            { name: 'MinBatteryVoltage', unit: 'V' }
+          ].forEach(({ name, unit }) => {
+            const key = `History/Daily/0/${name}`
+            ifaceDesc.properties[key] = {
+              type: 'd',
+              format: (v) => v != null ? v.toFixed(2) + unit : ''
+            }
+            iface[key] = 0
+            for (let tracker = 1; tracker <= iface.NrOfTrackers; tracker++) {
+              [
+                { name: 'MaxPower', unit: 'W' },
+                { name: 'MaxVoltage', unit: 'V' },
+                { name: 'Yield/Power', unit: 'kWh' },
+              ].forEach(({ name, unit }) => {
+                const key = `History/Daily/0/Pv/${tracker - 1}/${name}`
+                ifaceDesc.properties[key] = {
+                  type: 'd',
+                  format: (v) => v != null ? v.toFixed(2) + unit : ''
+                }
+                iface[key] = 0
+              })
+            }
+          })
+          for (let tracker = 1; tracker <= iface.NrOfTrackers; tracker++) {
+            [
+              { name: 'P', unit: 'W' },
+              { name: 'V', unit: 'V' },
+              { name: 'MppOperationMode', unit: '' },
+              { name: 'Name', unit: '' }
+            ].forEach(({ name, unit }) => {
+              const key = `Pv/${tracker - 1}/${name}`
+              ifaceDesc.properties[key] = {
+                type: 'd',
+                format: (v) => v != null ? v.toFixed(2) + unit : ''
+              }
+              iface[key] = 0
+            })
+          }
+          text = `Virtual ${iface.NrOfTrackers}-tracker solarcharger`
+        }
+          break
+
         case 'tank':
           iface.FluidType = Number(config.fluid_type ?? 1) // Fresh water
           if (!config.include_tank_battery) {
