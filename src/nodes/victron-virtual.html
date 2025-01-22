@@ -15,7 +15,7 @@
 
     function checkSelectedVirtualDevice() {
         [
-            'battery', 'gps', 'grid', 'pvinverter', 'tank', 'temperature'
+            'battery', 'gps', 'grid', 'pvinverter', 'solarcharger', 'tank', 'temperature'
         ].map( x => { $('.input-'+x).hide() })
         const selected = $('select#node-input-device').val()
         $('.input-'+selected).show()
