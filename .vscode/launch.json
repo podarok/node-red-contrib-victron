@@ -11,12 +11,12 @@
         "-s", 
         "${workspaceFolder}/.vscode/settings.js"
       ],
+      "outputCapture": "std",
       "cwd": "${env:HOME}",
         "env": {
           "NO_UPDATE_NOTIFIER": "1",
-          "DEBUG": "*",
-          "NODE_RED_DBUS_ADDRESS": "10.230.1.63:78",
-          // "NODE_RED_DBUS_ADDRESS": "${env:NODE_RED_DBUS_IP}"
+          "DEBUG": "victron-virtual",
+          "NODE_RED_DBUS_ADDRESS": "venus.local:78"
         },
         "envFile": "${workspaceFolder}/.env"
       },
