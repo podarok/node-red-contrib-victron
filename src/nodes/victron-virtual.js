@@ -244,12 +244,14 @@ function setupVirtualSwitch (config, iface, ifaceDesc, node, persistentStorage, 
     settingsKeysToTrack.push(`SwitchableOutput/output_${i}/State`)
     settingsKeysToTrack.push(`SwitchableOutput/output_${i}/Settings/CustomName`)
     settingsKeysToTrack.push(`SwitchableOutput/output_${i}/Settings/Group`)
+    settingsKeysToTrack.push(`SwitchableOutput/output_${i}/Settings/ShowUIControl`)
   }
 
   for (let i = 1; i <= Number(config.switch_nrofpwm ?? 0); i++) {
     settingsKeysToTrack.push(`SwitchableOutput/pwm_${i}/Dimming`)
     settingsKeysToTrack.push(`SwitchableOutput/pwm_${i}/Settings/CustomName`)
     settingsKeysToTrack.push(`SwitchableOutput/pwm_${i}/Settings/Group`)
+    settingsKeysToTrack.push(`SwitchableOutput/pwm_${i}/Settings/ShowUIControl`)
   }
 
   setupSwitchProperties(config, iface, ifaceDesc, switchData)
@@ -260,7 +262,7 @@ function setupVirtualSwitch (config, iface, ifaceDesc, node, persistentStorage, 
     setupSwitchStateMonitoring(iface, node, persistentStorage, persistenceKey, switchData)
     initializeSwitchState(config, iface, node, persistentStorage, switchData)
   } else {
-    // console.info('No persistence available for switch, applying initial states');
+    debug('No persistence available for switch, applying initial states');
     applySwitchConfiguredInitialStates(config, iface, switchData)
   }
 
@@ -294,13 +296,22 @@ function setupSwitchProperties (config, iface, ifaceDesc, switchData) {
       }[v] || 'unknown'),
       value: 1
     },
-    { name: 'Settings/ValidTypes', type: 'i', value: 0x3 }
+    { name: 'Settings/ValidTypes', type: 'i', value: 0x3 },
+    {
+      name: 'Settings/ShowUIControl',
+      type: 'i',
+      format: (v) => ({
+        0: 'No',
+        1: 'Yes'
+      }[v] || 'unknown'),
+      value: 1
+    }
   ]
 
   for (let i = 1; i <= Number(config.switch_nrofoutput ?? 0); i++) {
-    properties.forEach(({ name, type, value }) => {
+    properties.forEach(({ name, type, value, format }) => {
       const key = `SwitchableOutput/output_${i}/${name}`
-      ifaceDesc.properties[key] = { type }
+      ifaceDesc.properties[key] = { type, format }
 
       if (name === 'Name') {
         value += ` ${i}`
@@ -367,12 +378,14 @@ function setupSwitchPathsToTrack (config, pathsToTrack) {
 
       pathsToTrack.push(`SwitchableOutput/output_${i}/Settings/CustomName`)
       pathsToTrack.push(`SwitchableOutput/output_${i}/Settings/Group`)
+      pathsToTrack.push(`SwitchableOutput/output_${i}/Name`)
     }
   } else {
     for (let i = 1; i <= Number(config.switch_nrofoutput ?? 0); i++) {
       pathsToTrack.push(`SwitchableOutput/output_${i}/State`)
       pathsToTrack.push(`SwitchableOutput/output_${i}/Settings/CustomName`)
       pathsToTrack.push(`SwitchableOutput/output_${i}/Settings/Group`)
+      pathsToTrack.push(`SwitchableOutput/output_${i}/Name`)
     }
   }
 
@@ -387,12 +400,14 @@ function setupSwitchPathsToTrack (config, pathsToTrack) {
 
       pathsToTrack.push(`SwitchableOutput/pwm_${i}/Settings/CustomName`)
       pathsToTrack.push(`SwitchableOutput/pwm_${i}/Settings/Group`)
+      pathsToTrack.push(`SwitchableOutput/pwm_${i}/Name`)
     }
   } else {
     for (let i = 1; i <= Number(config.switch_nrofpwm ?? 0); i++) {
       pathsToTrack.push(`SwitchableOutput/pwm_${i}/Dimming`)
       pathsToTrack.push(`SwitchableOutput/pwm_${i}/Settings/CustomName`)
       pathsToTrack.push(`SwitchableOutput/pwm_${i}/Settings/Group`)
+      pathsToTrack.push(`SwitchableOutput/pwm_${i}/Name`)
     }
   }
 }
@@ -409,15 +424,17 @@ function setupSwitchStateMonitoring (iface, node, persistentStorage, persistence
 
     if (propName === 'CustomName') {
       currentData.CustomName = newValue
-      // console.info(`Saved CustomName change: ${newValue}`);
+      debug(`Saved CustomName change: ${newValue}`);
     }
 
     if (switchData.outputKeys.includes(propName) ||
         switchData.pwmKeys.includes(propName) ||
         propName.includes('/Settings/CustomName') ||
-        propName.includes('/Settings/Group')) {
+        propName.includes('/Settings/Group') ||
+        propName.includes('/Settings/ShowUIControl') ||
+        propName.includes('/Name')) {
       currentData.switches[propName] = newValue
-      // console.info(`Saved state change: ${propName} = ${newValue}`);
+      debug(`Saved state change: ${propName} = ${newValue}`);
     }
 
     node.context().set(persistenceKey, currentData, persistentStorage)
@@ -431,10 +448,10 @@ function initializeSwitchState (config, iface, node, persistentStorage, switchDa
   const savedData = node.context().get(persistenceKey, persistentStorage)
 
   if (!savedData || !savedData.switches || Object.keys(savedData.switches).length === 0) {
-    // console.info('No saved switch data found, applying configured initial states');
+    debug('No saved switch data found, applying configured initial states');
     applySwitchConfiguredInitialStates(config, iface, switchData)
   } else {
-    // console.info(`Loading saved switch data: ${JSON.stringify(savedData)}`);
+    debug(`Loading saved switch data: ${JSON.stringify(savedData)}`);
     const appliedSaved = applySwitchSavedStates(savedData, iface, switchData, config)
     if (!appliedSaved) {
       applySwitchConfiguredInitialStates(config, iface, switchData)
@@ -454,7 +471,7 @@ function applySwitchSavedStates (savedData, iface, switchData, config) {
     if (!initialSetting || initialSetting === 'previous') {
       if (switchStates[key] !== undefined) {
         iface[key] = switchStates[key]
-        // console.info(`Applied saved state for output ${key}: ${switchStates[key]}`);
+        debug(`Applied saved state for output ${key}: ${switchStates[key]}`);
         if (typeof iface.emit === 'function') {
           iface.emit(key, switchStates[key])
         }
@@ -469,7 +486,7 @@ function applySwitchSavedStates (savedData, iface, switchData, config) {
     if (!initialSetting || initialSetting === 'previous') {
       if (switchStates[key] !== undefined) {
         iface[key] = switchStates[key]
-        // console.info(`Applied saved state for PWM ${key}: ${switchStates[key]}`);
+        debug(`Applied saved state for PWM ${key}: ${switchStates[key]}`);
         if (typeof iface.emit === 'function') {
           iface.emit(key, switchStates[key])
         }
@@ -479,50 +496,33 @@ function applySwitchSavedStates (savedData, iface, switchData, config) {
   })
 
   for (let i = 1; i <= Number(config.switch_nrofoutput ?? 0); i++) {
-    const customNameKey = `SwitchableOutput/output_${i}/Settings/CustomName`
-    const groupKey = `SwitchableOutput/output_${i}/Settings/Group`
-
-    if (switchStates[customNameKey] !== undefined) {
-      iface[customNameKey] = switchStates[customNameKey]
-      // console.info(`Applied saved CustomName for output ${i}: ${switchStates[customNameKey]}`);
-      if (typeof iface.emit === 'function') {
-        iface.emit(customNameKey, switchStates[customNameKey])
+    [ 'Name', 'State', 'Settings/CustomName', 'Settings/Group', 'Settings/ShowUIControl' ].forEach((key) => {
+      const fullKey = `SwitchableOutput/output_${i}/${key}`
+      if (switchStates[fullKey] !== undefined) {
+        iface[fullKey] = switchStates[fullKey]
+        debug(`Applied saved state for output ${fullKey}: ${switchStates[fullKey]}`);
+        if (typeof iface.emit === 'function') {
+          iface.emit(fullKey, switchStates[fullKey])
+        }
+        appliedAny = true
       }
-      appliedAny = true
-    }
-
-    if (switchStates[groupKey] !== undefined) {
-      iface[groupKey] = switchStates[groupKey]
-      // console.info(`Applied saved Group for output ${i}: ${switchStates[groupKey]}`);
-      if (typeof iface.emit === 'function') {
-        iface.emit(groupKey, switchStates[groupKey])
-      }
-      appliedAny = true
-    }
+    })
   }
 
   for (let i = 1; i <= Number(config.switch_nrofpwm ?? 0); i++) {
-    const customNameKey = `SwitchableOutput/pwm_${i}/Settings/CustomName`
-    const groupKey = `SwitchableOutput/pwm_${i}/Settings/Group`
-
-    if (switchStates[customNameKey] !== undefined) {
-      iface[customNameKey] = switchStates[customNameKey]
-      // console.info(`Applied saved CustomName for PWM ${i}: ${switchStates[customNameKey]}`);
-      if (typeof iface.emit === 'function') {
-        iface.emit(customNameKey, switchStates[customNameKey])
+        [ 'Name', 'State', 'Settings/CustomName', 'Settings/Group', 'Settings/ShowUIControl' ].forEach((key) => {
+      const fullKey = `SwitchableOutput/pwm_${i}/${key}`
+      if (switchStates[fullKey] !== undefined) {
+        iface[fullKey] = switchStates[fullKey]
+        debug(`Applied saved state for pwm ${fullKey}: ${switchStates[fullKey]}`);
+        if (typeof iface.emit === 'function') {
+          iface.emit(fullKey, switchStates[fullKey])
+        }
+        appliedAny = true
       }
-      appliedAny = true
-    }
-
-    if (switchStates[groupKey] !== undefined) {
-      iface[groupKey] = switchStates[groupKey]
-      // console.info(`Applied saved Group for PWM ${i}: ${switchStates[groupKey]}`);
-      if (typeof iface.emit === 'function') {
-        iface.emit(groupKey, switchStates[groupKey])
-      }
-      appliedAny = true
-    }
+    })
   }
+
   return appliedAny
 }
 
@@ -536,13 +536,13 @@ function applySwitchConfiguredInitialStates (config, iface, switchData) {
 
       if (initialSetting === 'on') {
         iface[key] = 1
-        // console.info(`Applied configured initial state for ${key}: ON (1)`);
+        // debug(`Applied configured initial state for ${key}: ON (1)`);
       } else if (initialSetting === 'null') {
         iface[key] = null
-        // console.info(`Applied configured initial state for ${key}: NULL`);
+        // debug(`Applied configured initial state for ${key}: NULL`);
       } else if (initialSetting === 'off') {
         iface[key] = 0
-        // console.info(`Applied configured initial state for ${key}: OFF (0)`);
+        // debug(`Applied configured initial state for ${key}: OFF (0)`);
       }
     })
   }
@@ -556,10 +556,13 @@ function applySwitchConfiguredInitialStates (config, iface, switchData) {
 
       if (initialSetting.type === 'off') {
         iface[key] = 0
-        // console.info(`Applied configured initial state for ${key}: OFF (0%)`);
+        // debug()`Applied configured initial state for ${key}: OFF (0%)`);
+      } else if (initialSetting === 'null') {
+        iface[key] = null
+        // debug(`Applied configured initial state for ${key}: NULL`);
       } else if (initialSetting.type === 'custom') {
         iface[key] = initialSetting.value || 0
-        // console.info(`Applied configured initial state for ${key}: ${initialSetting.value || 0}%`);
+        // debug(`Applied configured initial state for ${key}: ${initialSetting.value || 0}%`);
       }
     })
   }
@@ -584,9 +587,9 @@ module.exports = function (RED) {
 
     if (fileStorageKey) {
       persistentStorage = fileStorageKey
-      console.info(`Using persistent context storage: ${persistentStorage}`)
+      debug(`Using persistent context storage: ${persistentStorage}`)
     } else {
-      console.info('No file-based context storage found in settings.js. Device states will not persist across restarts.')
+      debug('No file-based context storage found in settings.js. Device states will not persist across restarts.')
     }
 
     // Default paths to track for all devices
@@ -656,7 +659,7 @@ module.exports = function (RED) {
 
         if (savedData.CustomName) {
           iface.CustomName = savedData.CustomName
-          // console.warn(`Loaded saved CustomName: ${savedData.CustomName}`)
+          // debug(`Loaded saved CustomName: ${savedData.CustomName}`)
         }
 
         if (config.device === 'switch') {
@@ -664,7 +667,7 @@ module.exports = function (RED) {
             Object.entries(savedData.switches).forEach(([key, value]) => {
               if (key in iface) {
                 iface[key] = value
-                // console.warn(`Applied saved value for ${key}: ${value}`)
+                // debug(`Applied saved value for ${key}: ${value}`)
                 if (typeof iface.emit === 'function') {
                   iface.emit(key, value)
                 }
@@ -705,7 +708,7 @@ module.exports = function (RED) {
 
         if (fileStorageKey) {
           persistentStorage = fileStorageKey
-          // console.warn(`Using persistent context storage: ${persistentStorage}`)
+          debug(`Using persistent context storage: ${persistentStorage}`)
         } else {
           console.warn('No file-based context storage found in settings.js. Switch states will not persist across restarts.')
         }
@@ -915,7 +918,7 @@ module.exports = function (RED) {
       }
 
       function applyConfiguredInitialStates () {
-        // console.warn('Applying configured initial states')
+        debug('Applying configured initial states')
 
         if (config.device === 'switch') {
           if (config.switch_output_initial_states) {
@@ -925,10 +928,10 @@ module.exports = function (RED) {
 
               if (initialSetting === 'on') {
                 iface[stateKey] = 1
-                // console.warn(`Applied configured initial state for ${stateKey}: ON`)
+                debug(`Applied configured initial state for ${stateKey}: ON`)
               } else if (initialSetting === 'off') {
                 iface[stateKey] = 0
-                // console.warn(`Applied configured initial state for ${stateKey}: OFF`)
+                debug(`Applied configured initial state for ${stateKey}: OFF`)
               }
             }
           }
@@ -942,10 +945,10 @@ module.exports = function (RED) {
 
               if (initialSetting.type === 'off') {
                 iface[dimmingKey] = 0
-                // console.warn(`Applied configured initial state for ${dimmingKey}: 0%`)
+                debug(`Applied configured initial state for ${dimmingKey}: 0%`)
               } else if (initialSetting.type === 'custom') {
                 iface[dimmingKey] = initialSetting.value || 0
-                // console.warn(`Applied configured initial state for ${dimmingKey}: ${initialSetting.value || 0}%`)
+                debug(`Applied configured initial state for ${dimmingKey}: ${initialSetting.value || 0}%`)
               }
             }
           }
@@ -963,7 +966,7 @@ module.exports = function (RED) {
               const currentData = node.context().get(persistenceKey, persistentStorage) || {}
               currentData[propName] = newValue
               node.context().set(persistenceKey, currentData, persistentStorage)
-              // console.warn(`Saved state change: ${propName} = ${newValue}`)
+              debug(`Saved state change: ${propName} = ${newValue}`)
             }
 
             return originalEmit.apply(this, arguments)
@@ -978,13 +981,13 @@ module.exports = function (RED) {
             return { loaded: false }
           }
 
-          // console.warn(`Loading saved data for ${config.device}: ${JSON.stringify(savedData)}`)
+          debug(`Loading saved data for ${config.device}: ${JSON.stringify(savedData)}`)
           applyConfiguredInitialStates()
 
           Object.entries(savedData).forEach(([key, value]) => {
             if (key in iface && pathsToTrack.includes(key)) {
               iface[key] = value
-              // console.warn(`Applied saved value for ${key}: ${value}`)
+              debug(`Applied saved value for ${key}: ${value}`)
               if (typeof iface.emit === 'function') {
                 iface.emit(key, value)
               }
